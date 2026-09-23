@@ -12,3 +12,5 @@ Imports:
     dplyr,
     foreign,
     terra
+URL: https://github.com/snzimmer/RangeMap
+BugReports: https://github.com/snzimmer/RangeMap/issues
