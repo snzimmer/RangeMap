@@ -1,22 +1,22 @@
-#' Generate raster layers of species occurrence.
+#' Generate raster layers of species presence.
 #' 
 #' -- Warning! --
-#' This feature should be used to analyze areas of occurrence within a species' known range, not to determine a species' range.
-#' RangeMap is likely to indicate occurrence extending beyond the known range of a species; these results should be viewed with caution!
+#' This feature should be used to analyze areas of presence within a species' known range, not to determine a species' range.
+#' RangeMap is likely to indicate presence extending beyond the known range of a species; these results should be viewed with caution!
 #' 
 #' 
 #' @param raster_path Path to RangeMap raster file for a single year
 #' @param attributes_path Path to attributes table file. It is preferable to use the RangeMap_Attributes.csv so full field names are preserved, but a tif.vat.dbf file associated with one year's raster may be used
-#' @param species_codes Exact species code(s) for which to generate a species occurrence raster layer. A single raster layer will be generated showing occurrence of any of the species code(s) provided
+#' @param species_codes Exact species code(s) for which to generate a species presence raster layer. A single raster layer will be generated showing presence of any of the species code(s) provided
 #' @param AOI Area of interest. Spatial area for generating raster layers. This can be a polygon or raster loaded into environment (as terra of sf object), or a file path to a .shp or .tif
 #' @param output_directory Full directory path for the output rasters (not a file path). Does not need to already exist
 #' @param n_cores Optional. Sets the number of cores to use (defaults to 40% of total cores)
 #' @param tile_size_adjustment Optional. Adjust sizing of tiles run in parallel. Set this to less than 1 if raster generation fails
-#' @return Raster file showing occurrence of any of the species codes provided
+#' @return Raster file showing presence of any of the species codes provided
 #' @export
 #'
 #'
-generate_attribute_layers<- function(raster_path,
+generate_species_presence_layer<- function(raster_path,
                                      attributes_path,
                                      species_codes,
                                      AOI,
@@ -25,6 +25,7 @@ generate_attribute_layers<- function(raster_path,
                                      tile_size_adjustment = 1){
   options(warn = 1)
   #
+  message("Prepping data")
   # Check output directory path
   if (!dir.exists(output_directory)) dir.create(output_directory, recursive = TRUE, showWarnings = FALSE)
   
@@ -57,17 +58,17 @@ generate_attribute_layers<- function(raster_path,
   #
   species_code_pattern <- pattern <- paste0("\\b(", paste(species_codes, collapse = "|"), ")\\b")
   #
-  species_occurrence<- attributes_species |>
+  species_presence<- attributes_species |>
     dplyr::rowwise() |>
-    dplyr::mutate(occurrence = any(stringr::str_detect(dplyr::c_across(dplyr::everything()), species_code_pattern), na.rm = TRUE)) |>
+    dplyr::mutate(presence = any(stringr::str_detect(dplyr::c_across(dplyr::everything()), species_code_pattern), na.rm = TRUE)) |>
     dplyr::ungroup()
   #
-  species_occurrence$occurrence_numeric<- NA
-  species_occurrence$occurrence_numeric[species_occurrence$occurrence=="TRUE"]<- 1
+  species_presence$presence_numeric<- NA
+  species_presence$presence_numeric[species_presence$presence=="TRUE"]<- 1
   
-  # Filter to RM_ID and species occurrence
+  # Filter to RM_ID and species presence
   fields<- data.frame("RM_ID" = attributes$RM_ID, 
-                      "Occurrence" = species_occurrence$occurrence_numeric)
+                      "Presence" = species_presence$presence_numeric)
   #
   
   # Write functions to process the files in parallel, with automatic retry of failed tiles
@@ -144,7 +145,7 @@ generate_attribute_layers<- function(raster_path,
   }
   
   # Start running raster data here
-  message("Prepping data")
+  message("Generating species presence raster")
   
   # Load raster
   ras<- terra::rast(raster_path)
@@ -210,7 +211,7 @@ generate_attribute_layers<- function(raster_path,
       full.names = TRUE
     )
     
-    message("Saving species occurence raster")
+    message("Saving species presence raster")
     terra::setGDALconfig("GDAL_MAX_DATASET_POOL_SIZE", "1000")
     terra::setGDALconfig("GDAL_CACHEMAX","4000")
     
@@ -218,9 +219,9 @@ generate_attribute_layers<- function(raster_path,
     vrt_file <- file.path(tile_temp_dir, "vrt.vrt")
     terra::vrt(processed_tiles,vrt_file, set_names = TRUE, overwrite=T)
     r <- terra::rast(vrt_file)
-    names(r)<- paste0("Occurence_", paste0(paste(species_codes, collapse = "_")))
+    names(r)<- paste0("Presence_", paste0(paste(species_codes, collapse = "_")))
     #
-    out_tif<- file.path(output_directory, paste0("Occurence_", paste0(paste(species_codes, collapse = "_"), ".tif")))
+    out_tif<- file.path(output_directory, paste0("Presence_", paste0(paste(species_codes, collapse = "_"), ".tif")))
     #
     dt<- "INT1U"
     nodata<- 255
@@ -237,13 +238,12 @@ generate_attribute_layers<- function(raster_path,
         gdal = c("COMPRESS=DEFLATE", "ZLEVEL=8", "PREDICTOR=2",
                  "TILED=YES", "BLOCKXSIZE=512", "BLOCKYSIZE=512",
                  "NUM_THREADS=ALL_CPUS", "SPARSE_OK=YES", "BIGTIFF=YES"))
-      
-    }
     
     # Clean up processed tiles
     file.remove(processed_tiles)
     file.remove(vrt_file)
-    
-  }
-  unlink(tile_temp_dir, recursive = TRUE)
+    unlink(tile_temp_dir, recursive = TRUE)
 }
+    
+   
+
