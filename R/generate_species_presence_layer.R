@@ -1,13 +1,14 @@
 #' Generate raster layers of species presence.
 #' 
 #' -- Warning! --
-#' This feature should be used to analyze areas of presence within a species' known range, not to determine a species' range.
-#' RangeMap is likely to indicate presence extending beyond the known range of a species; these results should be viewed with caution!
+#' This feature should be used to analyze areas of occurrence within a species' known range, not to determine a species' range!
+#' RangeMap is likely to indicate species occurrence extending beyond the known range of a species; these results should be viewed with caution!
 #' 
+#' This function will only work for species whose presence is tracked already in the RangeMap attribute table. For example, all species defined as Sage Grouse preferred forbs are tracked in this pre-generated field, but forbs that are not Sage Grouse preferred forbs are not necessarily tracked. Unaddressed species can be run individually to add to a RangeMap_Attributes.csv file - contact scott.zimmer@usda.gov for assistance. 
 #' 
 #' @param raster_path Path to RangeMap raster file for a single year
 #' @param attributes_path Path to attributes table file. It is preferable to use the RangeMap_Attributes.csv so full field names are preserved, but a tif.vat.dbf file associated with one year's raster may be used
-#' @param species_codes Exact species code(s) for which to generate a species presence raster layer. A single raster layer will be generated showing presence of any of the species code(s) provided
+#' @param species_codes Exact species code(s) for which to generate a species presence raster layer. A single raster layer will be generated showing presence of any of the species code(s) provided. See note above regarding species codes needing to be tracked in an attribute field
 #' @param AOI Area of interest. Spatial area for generating raster layers. This can be a polygon or raster loaded into environment (as terra of sf object), or a file path to a .shp or .tif
 #' @param output_directory Full directory path for the output rasters (not a file path). Does not need to already exist
 #' @param n_cores Optional. Sets the number of cores to use (defaults to 40% of total cores)
