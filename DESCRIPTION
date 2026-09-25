@@ -1,6 +1,6 @@
 Package: RangeMap
 Title: RangeMap
-Version: 0.0.0.9000
+Version: 0.0.1.4000
 Authors@R: 
     person("Scott", "Zimmer", , "scott.zimmer@usda.gov", role = c("aut", "cre"))
 Description: This package provides functions to easily generate and work with attribute layers derived from the RangeMap plot imputation product. From the original RangeMap plot ID raster and plot attributes (from either .csv or .dbf), raster layers of individual attributes can easily be generated and saved for an area of interest.
