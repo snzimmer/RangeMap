@@ -23,14 +23,14 @@ generate_attribute_layers(
 
 \item{AOI}{Area of interest. Spatial area for generating raster layers. This can be a polygon or raster loaded into environment (as terra of sf object), or a file path to a .shp or .tif}
 
-\item{output_directory}{Full directory path for the output rasters (not a file path). Does not need to already be created}
+\item{output_directory}{Full directory path for the output rasters (not a file path). Does not need to already exist}
 
-\item{n_cores}{If desired, set the number of cores to use (defaults to 40\% of total cores)}
+\item{n_cores}{Optional. Sets the number of cores to use (defaults to 40\% of total cores)}
 
-\item{tile_size_adjustment}{If desired, adjust tile sizing. Set this to less than 1 to create smaller tiles less prone to failure in processing}
+\item{tile_size_adjustment}{Optional. Adjust sizing of tiles run in parallel. Set this to less than 1 if raster generation fails}
 }
 \value{
-Raster file of all desired attributes
+Raster files of each desired attribute
 }
 \description{
 Generate raster layers of individual attributes.
