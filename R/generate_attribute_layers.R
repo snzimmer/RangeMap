@@ -27,15 +27,6 @@ generate_attribute_layers<- function(raster_path,
   tile_temp_dir<- file.path(tempdir(), paste0("tiles_", format(Sys.time(), "%Y%m%d%H%M%S")))
   dir.create(tile_temp_dir, showWarnings = FALSE)
 
-  # if (file_test("-f", output_directory)) {
-  #   stop("output_directory must be a directory, not a file")
-  # }
-  # #
-  # if(!dir.exists(output_directory)){
-  #   dir.create(output_directory, recursive = T)
-  # }
-
-
   # Check if the attributes path is csv or dbf, then load attributes
   if(endsWith(attributes_path, ".dbf")){
     attributes<- foreign::read.dbf(attributes_path)
@@ -214,8 +205,10 @@ generate_attribute_layers<- function(raster_path,
     ras,
     y = c(tile_dim, tile_dim),
     filename = file.path(tile_temp_dir, "tile_.tif"),
-    na.rm = TRUE
-  )
+    na.rm = TRUE,
+    datatype = "INT4S",
+    gdal = c("COMPRESS=DEFLATE","PREDICTOR=2", "TILED=YES",
+      "BLOCKXSIZE=256", "BLOCKYSIZE=256", "NUM_THREADS=ALL_CPUS"))
 
 
   # Split attributes up if more than 10 are selected. Otherwise memory issues may arise
