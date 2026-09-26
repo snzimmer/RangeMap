@@ -203,65 +203,65 @@ generate_attribute_layers_explicit<- function(raster_path,
   tile_dim<- max(floor(sqrt(max_cells)), 500) * tile_size_adjustment
 
   # Generate tiles, only needs to be done once regardless of the number of attributes being generated
-  manual_makeTiles<- function(ras,
-                              tile_dim,
-                              tile_temp_dir,
-                              datatype = "INT4S",
-                              gdal_opts = c("COMPRESS=DEFLATE", "ZLEVEL=8", "PREDICTOR=2",
-                                            "TILED=YES", "BLOCKXSIZE=512", "BLOCKYSIZE=512",
-                                            "NUM_THREADS=ALL_CPUS","SPARSE_OK=YES", "BIGTIFF=YES"),
-                              na_rm = TRUE) {
+  manual_make_tiles<- function(
+    ras,
+    tile_dim,
+    tile_temp_dir,
+    datatype = "INT4S",
+    gdal_opts = c(
+      "COMPRESS=DEFLATE", "ZLEVEL=8", "PREDICTOR=2",
+      "TILED=YES", "BLOCKXSIZE=512", "BLOCKYSIZE=512",
+      "NUM_THREADS=ALL_CPUS", "SPARSE_OK=YES", "BIGTIFF=YES"),
+    na_rm = TRUE) {
 
     terra::setGDALconfig("GDAL_PAM_ENABLED", "NO")
-
-    # Build tile grid manually
+    #
     nr<- terra::nrow(ras)
     nc<- terra::ncol(ras)
-    res_xy<- terra::res(ras)
     #
     row_starts<- seq(1, nr, by = tile_dim)
     col_starts<- seq(1, nc, by = tile_dim)
     #
-    tile_files<- character(0)
-    idx<- 0
+    # Grid expand to vectorize grid creation instead of double nested for-loop
+    grid<- expand.grid(r0 = row_starts, c0 = col_starts)
     #
-    for (r0 in row_starts) {
-      for (c0 in col_starts) {
-        idx<- idx + 1
-        #
-        r1<- min(r0 + tile_dim - 1, nr)
-        c1<- min(c0 + tile_dim - 1, nc)
-        #
-        xmin<- terra::xFromCol(ras, c0) - res_xy[1] / 2
-        xmax<- terra::xFromCol(ras, c1) + res_xy[1] / 2
-        ymax<- terra::yFromRow(ras, r0) + res_xy[2] / 2
-        ymin<- terra::yFromRow(ras, r1) - res_xy[2] / 2
-        #
-        tile_ext<- terra::ext(xmin, xmax, ymin, ymax)
-        tile_ras<- terra::crop(ras, tile_ext)
-        #
-        if (na_rm && all(is.na(terra::values(tile_ras)))) next
-        #
-        out_file<- file.path(tile_temp_dir, sprintf("tile_%03d.tif", idx))
-        #
-        terra::writeRaster(
-          tile_ras,
-          filename  = out_file,
-          datatype  = datatype,
-          gdal      = gdal_opts,
-          overwrite = TRUE
-        )
-        tile_files<- c(tile_files, out_file)
+    tile_files<- vector("list", nrow(grid))
+
+    for (i in seq_len(nrow(grid))) {
+      r0<- grid$r0[i]
+      c0<- grid$c0[i]
+
+      r1<- min(r0 + tile_dim - 1, nr)
+      c1<- min(c0 + tile_dim - 1, nc)
+
+      # Crop raster slice directly by row/col ranges
+      tile_ras<- ras[r0:r1, c0:c1, drop = FALSE]
+
+      # Skip empty/all-NA tiles
+      if (na_rm && terra::hasValues(tile_ras) && all(is.na(terra::values(tile_ras)))) {
+        next
       }
+      out_file<- file.path(tile_temp_dir, sprintf("tile_%03d.tif", i))
+      #
+      terra::writeRaster(
+        tile_ras,
+        filename  = out_file,
+        datatype  = datatype,
+        gdal      = gdal_opts,
+        overwrite = TRUE
+      )
+      tile_files[[i]]<- out_file
     }
-    tile_files
+
+    # Return non-null created file paths
+    unlist(tile_files, use.names = FALSE)
   }
+
 
   tile_files<- manual_makeTiles(
     ras,
     tile_dim = tile_dim,
     tile_temp_dir = file.path(tile_temp_dir))
-
 
 
   # Split attributes up if more than 10 are selected. Otherwise memory issues may arise
