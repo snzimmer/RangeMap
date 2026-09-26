@@ -11,13 +11,13 @@
 #' @export
 #'
 #'
-generate_attribute_layers<- function(raster_path,
-                                     attributes_path,
-                                     attribute_names,
-                                     AOI,
-                                     output_directory,
-                                     n_cores = NULL,
-                                     tile_size_adjustment = NULL){
+generate_attribute_layers_explicit<- function(raster_path,
+                                              attributes_path,
+                                              attribute_names,
+                                              AOI,
+                                              output_directory,
+                                              n_cores = NULL,
+                                              tile_size_adjustment = NULL){
   options(warn = 1)
   #
   # Check output directory path
@@ -32,7 +32,7 @@ generate_attribute_layers<- function(raster_path,
     attributes<- foreign::read.dbf(attributes_path)
     warning("Attributes are from dbf file. Recommend using Attributes csv for full attribute names")
   } else if(endsWith(attributes_path, ".csv")){
-    attributes<- utils::read.csv(attributes_path, check.names = F)
+    attributes<- utils::read.csv(attributes_path, check.names = FALSE)
   } else{
     message("Expected .csv or .dbf file, something else provided")
   }
@@ -61,8 +61,8 @@ generate_attribute_layers<- function(raster_path,
   row.names(attributes_min_max)<- c("Minimum", "Maximum")
 
   for(i in 1:ncol(attributes_min_max)){
-    attributes_min_max[1,i]<- min(attributes[,i], na.rm=T)
-    attributes_min_max[2,i]<- max(attributes[,i], na.rm=T)
+    attributes_min_max[1,i]<- min(attributes[,i], na.rm = TRUE)
+    attributes_min_max[2,i]<- max(attributes[,i], na.rm = TRUE)
   }
 
   # Make new df for tracking necessary datatype
@@ -168,9 +168,9 @@ generate_attribute_layers<- function(raster_path,
   # Reproject AOI
   # If AOI is a file path to .shp or .tif, read these in
   if(inherits(AOI, "character") && endsWith(AOI, ".shp")){
-   AOI_proj<- terra::project(terra::vect(AOI), terra::crs(ras))
+    AOI_proj<- terra::project(terra::vect(AOI), terra::crs(ras))
   } else if (inherits(AOI, "character") && endsWith(AOI, ".tif")){
-      AOI_proj<- terra::ext(terra::project(terra::rast(AOI), terra::crs(ras)))
+    AOI_proj<- terra::ext(terra::project(terra::rast(AOI), terra::crs(ras)))
   } else if(class(AOI)[1] == "SpatVector"){
     AOI_proj<- terra::project(AOI, terra::crs(ras))
   } else if (class(AOI)[1] %in% c("sf", "SpatialPolygons")){
@@ -186,7 +186,7 @@ generate_attribute_layers<- function(raster_path,
   if(class(AOI_proj)[1] == "SpatExtent"){
     ras<- terra::crop(ras, AOI_proj)
   } else if(class(AOI_proj)[1] == "SpatVector"){
-    ras<- terra::crop(ras, AOI_proj, mask=T)
+    ras<- terra::crop(ras, AOI_proj, mask = TRUE)
   }
 
   # Begin to work on raster generation
@@ -203,15 +203,65 @@ generate_attribute_layers<- function(raster_path,
   tile_dim<- max(floor(sqrt(max_cells)), 500) * tile_size_adjustment
 
   # Generate tiles, only needs to be done once regardless of the number of attributes being generated
-  terra::setGDALconfig("GDAL_PAM_ENABLED", "NO")
-  tile_files<- terra::makeTiles(
+  manual_makeTiles<- function(ras,
+                              tile_dim,
+                              tile_temp_dir,
+                              datatype = "INT4S",
+                              gdal_opts = c("COMPRESS=DEFLATE", "ZLEVEL=8", "PREDICTOR=2",
+                                            "TILED=YES", "BLOCKXSIZE=512", "BLOCKYSIZE=512",
+                                            "NUM_THREADS=ALL_CPUS","SPARSE_OK=YES", "BIGTIFF=YES"),
+                              na_rm = TRUE) {
+
+    terra::setGDALconfig("GDAL_PAM_ENABLED", "NO")
+
+    # Build tile grid manually
+    nr<- terra::nrow(ras)
+    nc<- terra::ncol(ras)
+    res_xy<- terra::res(ras)
+    #
+    row_starts<- seq(1, nr, by = tile_dim)
+    col_starts<- seq(1, nc, by = tile_dim)
+    #
+    tile_files<- character(0)
+    idx<- 0
+    #
+    for (r0 in row_starts) {
+      for (c0 in col_starts) {
+        idx<- idx + 1
+        #
+        r1<- min(r0 + tile_dim - 1, nr)
+        c1<- min(c0 + tile_dim - 1, nc)
+        #
+        xmin<- terra::xFromCol(ras, c0) - res_xy[1] / 2
+        xmax<- terra::xFromCol(ras, c1) + res_xy[1] / 2
+        ymax<- terra::yFromRow(ras, r0) + res_xy[2] / 2
+        ymin<- terra::yFromRow(ras, r1) - res_xy[2] / 2
+        #
+        tile_ext<- terra::ext(xmin, xmax, ymin, ymax)
+        tile_ras<- terra::crop(ras, tile_ext)
+        #
+        if (na_rm && all(is.na(terra::values(tile_ras)))) next
+        #
+        out_file<- file.path(tile_temp_dir, sprintf("tile_%03d.tif", idx))
+        #
+        terra::writeRaster(
+          tile_ras,
+          filename  = out_file,
+          datatype  = datatype,
+          gdal      = gdal_opts,
+          overwrite = TRUE
+        )
+        tile_files<- c(tile_files, out_file)
+      }
+    }
+    tile_files
+  }
+
+  tile_files<- manual_makeTiles(
     ras,
-    y = c(tile_dim, tile_dim),
-    filename = file.path(tile_temp_dir, "tile_.tif"),
-    na.rm = TRUE,
-    datatype = "INT4S",
-    gdal = c("COMPRESS=DEFLATE","PREDICTOR=2", "TILED=YES",
-      "BLOCKXSIZE=256", "BLOCKYSIZE=256", "NUM_THREADS=ALL_CPUS"))
+    tile_dim = tile_dim,
+    tile_temp_dir = file.path(tile_temp_dir))
+
 
 
   # Split attributes up if more than 10 are selected. Otherwise memory issues may arise
@@ -220,11 +270,7 @@ generate_attribute_layers<- function(raster_path,
     attribute_names,
     ceiling(seq_along(attribute_names) / max_per_batch)
   )
-  #if (length(attribute_batches) > 1){
-  #  message(sprintf("Splitting attributes into %d batches to reduce memory overhead",
-  #                  length(attribute_batches)))
-  #}
-  #
+
   for(batch in seq_along(attribute_batches)){
     message("Starting attributes batch ", batch, " of ", length(attribute_batches))
     #
@@ -251,7 +297,7 @@ generate_attribute_layers<- function(raster_path,
 
     # Export single mosaicked raster of processed attributes
     vrt_file<- file.path(tile_temp_dir, "vrt.vrt")
-    terra::vrt(processed_tiles,vrt_file, set_names = TRUE, overwrite=T)
+    terra::vrt(processed_tiles,vrt_file, set_names = TRUE, overwrite = TRUE)
     r<- terra::rast(vrt_file)
     n_bands<- terra::nlyr(r)
 
